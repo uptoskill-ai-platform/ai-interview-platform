@@ -1,122 +1,151 @@
-# System Architecture
+﻿# System Architecture
 
 ## Overview
 
-The platform consists of three interconnected AI systems that together form a complete automated recruitment pipeline.
+The platform consists of three interconnected AI systems that together form
+a complete automated recruitment pipeline.
 
 | Project | Purpose | Interaction |
-|----------|----------|-------------|
-| Project 1 – Proctoring System | Monitors candidate behavior during assessments and interviews | Human ↔ Human (AI observes) |
-| Project 2 – Assessment System | Generates and evaluates technical tests | Human ↔ AI Questions |
-| Project 3 – Voice Interview System | Conducts automated interviews | Human ↔ AI Voice |
+|---------|---------|-------------|
+| Project 1 — Proctoring System | Monitors candidate behavior in real time | AI observes silently |
+| Project 2 — Assessment System | Generates and evaluates technical questions | Human answers AI questions |
+| Project 3 — Voice Interview System | Conducts fully automated voice interview | Human speaks to AI |
 
-## Candidate Workflow
+---
 
-```text
-Stage 1 → Candidate takes Assessment (Project 2)
-          ↓ (if passed)
+## Candidate Journey
+Stage 1 — Assessment (Project 2)
+AI generates questions → Candidate answers → AI evaluates
+Proctoring (Project 1) runs silently in background
+↓ if passed
+Stage 2 — Voice Interview (Project 3)
+AI asks questions → Candidate speaks → Whisper transcribes → AI evaluates
+Proctoring (Project 1) continues in background
+↓
+Stage 3 — HR Dashboard
+Combined report with scores, risk level, transcript, and recommendation
 
-Stage 2 → Candidate takes Voice Interview (Project 3)
+---
 
-Project 1 (Proctoring) runs in the background during both stages
-
-Stage 3 → HR receives a combined evaluation report
-
-## architecture
-
-Candidate Browser
+## System Architecture
+Candidate Browser (React — port 5173)
 |
-├── Auth Server (Node.js — port 5000)
-│       JWT authentication and user management
-│
-└── Backend API (FastAPI — port 8000)
-|
-├── PostgreSQL (port 5432)
-│       Persistent storage for all data
-│
-├── Gemini AI
-│       Question generation and answer evaluation
-│
-└── AI Modules
-Computer vision, speech recognition
+├──────────────────────────────────────┐
+↓                                      ↓
+Auth Server                            Backend API
+(Node.js — port 5000)                 (FastAPI — port 8000)
+JWT authentication                            |
+User management                    ┌──────────┼──────────┐
+↓          ↓          ↓
+PostgreSQL   Gemini AI   AI Modules
+(port 5432)  (free tier) YOLO + MediaPipe
+All data     Questions   Computer vision
+storage      Evaluation  Speech recognition
 
-## System Responsibilities
+---
+
+## Service Responsibilities
 
 ### Frontend — port 5173
 - Candidate interface for all three projects
-- Assessment dashboard
+- Assessment dashboard with timer and question display
+- Voice interview interface with microphone controls
 - WebRTC for camera and microphone streaming
-- WebSocket client for real-time proctoring and STT
+- WebSocket client for real-time proctoring alerts and STT
 
 ### Auth Server — port 5000
-- User registration and login
+- Candidate and HR registration and login
 - JWT token generation and verification
-- Role management
+- Role management (candidate / admin)
 
 ### Backend API — port 8000
-- Session lifecycle management
-- Answer evaluation pipeline
+- Session lifecycle management (start, end, terminate)
+- Answer evaluation via Gemini AI
 - Real-time proctoring via WebSocket
-- Speech to text via WebSocket
-- Risk scoring engine
-- Report generation
+- Speech to text streaming via WebSocket
+- Risk scoring engine (violations → risk level)
+- Performance report generation
+- Admin dashboard data
 
 ### Database — port 5432
-Six core tables (planned):
-- `users`
-- `interview_sessions`
-- `object_detection_events`
-- `face_pose_events`
-- `audio_transcripts`
-- `answer_evaluations`
+
+Six core tables:
+
+| Table | Purpose |
+|-------|---------|
+| `users` | Candidate and admin profiles |
+| `interview_sessions` | Session lifecycle and status |
+| `object_detection_events` | Phone and multiple person violations |
+| `face_pose_events` | Head and eye movement violations |
+| `audio_transcripts` | Speech to text output |
+| `answer_evaluations` | Question scores and AI feedback |
+
+---
 
 ## API Endpoints
 
-### Auth Server
-POST   /auth/register
-POST   /auth/login
-GET    /auth/verify
+### Auth Server (port 5000)
+POST   /auth/register          Register new user
+POST   /auth/login             Login and receive JWT token
+GET    /auth/verify            Verify token validity
 
-### Backend API
-POST   /session/start
-POST   /session/{id}/end
-POST   /session/{id}/terminate
-GET    /session/{id}/status
-GET    /session/{id}/results
-POST   /session/{id}/evaluate
-GET    /session/{id}/answers
-GET    /report/{candidate_id}
-POST   /report/{id}/generate
-POST   /session/{id}/proctor/event
-GET    /admin/dashboard
-WS     /ws/proctor/{id}
-WS     /ws/stt/{id}
+### Backend API (port 8000)
+Session Management
+POST   /session/start                    Start a new interview session
+POST   /session/{id}/end                 End session normally
+POST   /session/{id}/terminate           Force terminate session
+GET    /session/{id}/status              Get current session state
+GET    /session/{id}/results             Get final results
+Evaluation
+POST   /session/{id}/evaluate            Submit answer for AI evaluation
+GET    /session/{id}/answers             Get all answers with feedback
+Reports
+GET    /report/{candidate_id}            Get candidate report
+POST   /report/{id}/generate             Generate performance summary
+Proctoring
+POST   /session/{id}/proctor/event       Log a violation event
+Admin
+GET    /admin/dashboard                  HR overview dashboard
+WebSocket
+WS     /ws/proctor/{id}                  Real-time camera frame processing
+WS     /ws/stt/{id}                      Real-time speech to text streaming
+
+---
 
 ## Domain List
 
 Candidates select one domain at the start of their session:
 
-- Python
-- Data Science
-- Web Development
-- System Design
-- Java
-- SQL
-- Machine Learning
+| Domain |
+|--------|
+| Python |
+| Data Science |
+| Web Development |
+| System Design |
+| Java |
+| SQL |
+| Machine Learning |
+
+---
 
 ## Security
 
-- JWT authentication on all protected routes
-- No secrets committed to repository
+- JWT authentication required on all protected routes
 - CORS restricted to frontend origin only
-- All credentials loaded from environment variables
+- No secrets or API keys committed to repository
+- All credentials loaded from environment variables via `.env`
+- Input validation on all endpoints via Pydantic
+
+---
 
 ## Phase 2 — Planned
 
-The following are planned for a future phase and not yet implemented:
+Not yet implemented. Planned for future phases:
 
-- Redis for session caching
-- Alembic for database migrations
-- Docker containerization
-- Kubernetes deployment
-- Load balancing
+| Feature | Purpose |
+|---------|---------|
+| Redis | Session caching and real-time state |
+| Alembic | Database migration version control |
+| Docker Compose | Full containerized local setup |
+| Kubernetes | Production deployment and scaling |
+| Load Balancer | Handle concurrent users at scale |
