@@ -15,14 +15,14 @@ The platform consists of three interconnected AI systems that together form a co
 ## Candidate Journey
 
 ```
-Stage 1 — Assessment (Project 2)
-    AI generates questions → Candidate answers → AI evaluates
-    Proctoring runs silently in background
-            ↓ if passed
-Stage 2 — Voice Interview (Project 3)
-    AI asks questions → Candidate speaks → Whisper transcribes → AI evaluates
-    Proctoring continues in background
-            ↓
+Stage 1 — HR schedules interview for candidate
+    HR selects: domain, interview type (assessment / voice / both), date
+
+Stage 2 — Candidate completes scheduled interview
+    Assessment: AI generates questions → Candidate types answers → AI evaluates
+    Voice Interview: AI asks questions → Candidate speaks → Whisper transcribes → AI evaluates
+    Proctoring runs silently in background for both
+
 Stage 3 — HR Dashboard
     Combined report: scores, risk level, transcript, recommendation
 ```
@@ -61,7 +61,7 @@ Candidate Browser (React — port 5173)
 ### Auth Server — port 5000
 - Candidate and HR registration and login
 - JWT token generation and verification
-- Role management (candidate / admin)
+- Role management (candidate / hr / admin)
 
 ### Backend API — port 8000
 - Session lifecycle management (start, end, terminate)
@@ -74,11 +74,12 @@ Candidate Browser (React — port 5173)
 
 ### Database — port 5432
 
-Six core tables:
+Seven core tables
 
 | Table | Purpose |
 |-------|---------|
-| `users` | Candidate and admin profiles |
+| `users` | Candidate, HR, and admin profiles |
+| `interview_schedules` | HR schedules interviews for candidates |
 | `interview_sessions` | Session lifecycle and status |
 | `object_detection_events` | Phone and multiple person violations |
 | `face_pose_events` | Head and eye movement violations |
@@ -108,6 +109,8 @@ Six core tables:
 | POST | `/session/{id}/terminate` | Force terminate session |
 | GET | `/session/{id}/status` | Get current session state |
 | GET | `/session/{id}/results` | Get final results |
+| GET | `/session/{id}/answers` | Get all answers with AI feedback |
+| GET | `/users/me/sessions` | Candidate views their session history |
 
 **Evaluation**
 
@@ -129,11 +132,17 @@ Six core tables:
 |--------|----------|-------------|
 | POST | `/session/{id}/proctor/event` | Log a violation event |
 
-**Admin**
+**Schedules — HR Only**
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/admin/dashboard` | HR overview dashboard |
+| POST | `/schedules` | HR schedules interview for candidate |
+| GET | `/schedules` | HR views all their scheduled interviews |
+| PATCH | `/schedules/{id}/cancel` | HR cancels a scheduled interview |
+
+**Admin**
+| GET | `/admin/dashboard` | System overview — admin only |
+| GET | `/admin/sessions` | All sessions across all HR — admin only |
 
 **WebSocket**
 
@@ -146,7 +155,7 @@ Six core tables:
 
 ## Domain List
 
-Candidates select one domain at the start of their session:
+HR selects when scheduling
 
 | Domain |
 |--------|
@@ -157,6 +166,37 @@ Candidates select one domain at the start of their session:
 | Java |
 | SQL |
 | Machine Learning |
+
+## Session Rules
+
+| Rule | Assessment | Voice Interview |
+|------|-----------|-----------------|
+| Total questions | 10 | 10 |
+| Max score | 100 | 100 |
+| Pass threshold | 60% | 60% |
+| Timeout per question | 30 minutes | 3 minutes |
+| Negative marking | No | No |
+| Sessions independent | Yes | Yes |
+
+## Proctoring Risk Weights
+
+| Violation | Assessment | Voice Interview |
+|-----------|-----------|-----------------|
+| PHONE_DETECTED | 60 | 60 |
+| MULTIPLE_PERSONS | 55 | 55 |
+| NO_FACE | 30 | 30 |
+| TAB_SWITCH | 25 | 25 |
+| LOOKING_AWAY | 8 | 15 |
+| ABNORMAL_MOVEMENT | 5 | 10 |
+
+## Risk Levels
+
+| Score | Level | Action |
+|-------|-------|--------|
+| 0 – 30 | SAFE | No action |
+| 31 – 60 | WARNING | Warning shown to candidate |
+| 61 – 85 | FLAGGED | HR notified |
+| 86 – 100 | TERMINATE | Session ends automatically |
 
 ---
 
